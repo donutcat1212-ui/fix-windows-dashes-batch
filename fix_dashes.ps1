@@ -5,7 +5,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$resolvedRoot = (Resolve-Path -LiteralPath $Root).Path
+$cleanRoot = $Root.Trim().Trim('"')
+$resolvedRoot = (Resolve-Path -LiteralPath $cleanRoot).Path
 $badChars = @(
     [char]0x2014, # em dash: —
     [char]0x2013, # en dash: –

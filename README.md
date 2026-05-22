@@ -37,6 +37,8 @@ You can also run it from `cmd` with an explicit target:
 fix_dashes.bat "C:\Users\...\Desktop\Выписки"
 ```
 
+The batch wrapper removes a trailing backslash from the target path before passing it to PowerShell. This avoids `Resolve-Path: Illegal characters in path` errors on older Windows/PowerShell argument parsing.
+
 ## Safety
 
 - Files are renamed before folders.

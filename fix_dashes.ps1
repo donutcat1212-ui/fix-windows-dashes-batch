@@ -52,16 +52,39 @@ function Get-UniqueTargetPath {
     return $target
 }
 
+function Get-ParentDirectory {
+    param([System.IO.FileSystemInfo]$Item)
+
+    if ($Item.PSIsContainer) {
+        if ($null -eq $Item.Parent) {
+            return ""
+        }
+        return $Item.Parent.FullName
+    }
+
+    return $Item.DirectoryName
+}
+
 function Rename-ItemIfNeeded {
     param([System.IO.FileSystemInfo]$Item)
+
+    if ($null -eq $Item -or [string]::IsNullOrWhiteSpace($Item.FullName)) {
+        return
+    }
 
     $fixedName = Get-FixedName -Name $Item.Name
     if ($fixedName -eq $Item.Name) {
         return
     }
 
+    $parentDirectory = Get-ParentDirectory -Item $Item
+    if ([string]::IsNullOrWhiteSpace($parentDirectory)) {
+        Write-Host ("SKIPPED: no parent directory for {0}" -f $Item.FullName)
+        return
+    }
+
     $target = Get-UniqueTargetPath `
-        -Directory $Item.DirectoryName `
+        -Directory $parentDirectory `
         -Name $fixedName `
         -CurrentFullName $Item.FullName
 
@@ -73,12 +96,18 @@ Write-Host ("Target folder: {0}" -f $resolvedRoot)
 Write-Host "Replacing: em dash, en dash, minus sign -> hyphen-minus"
 Write-Host ""
 
-Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File -Force |
-    ForEach-Object { Rename-ItemIfNeeded -Item $_ }
+$files = @(Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File -Force)
+foreach ($file in $files) {
+    Rename-ItemIfNeeded -Item $file
+}
 
-Get-ChildItem -LiteralPath $resolvedRoot -Recurse -Directory -Force |
-    Sort-Object FullName -Descending |
-    ForEach-Object { Rename-ItemIfNeeded -Item $_ }
+$directories = @(
+    Get-ChildItem -LiteralPath $resolvedRoot -Recurse -Directory -Force |
+        Sort-Object FullName -Descending
+)
+foreach ($directory in $directories) {
+    Rename-ItemIfNeeded -Item $directory
+}
 
 Write-Host ""
 Write-Host "Done."

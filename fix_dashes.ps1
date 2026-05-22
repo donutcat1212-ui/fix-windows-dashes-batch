@@ -7,19 +7,53 @@ $ErrorActionPreference = "Stop"
 
 $cleanRoot = $Root.Trim().Trim('"')
 $resolvedRoot = (Resolve-Path -LiteralPath $cleanRoot).Path
-$badChars = @(
+$dashChars = @(
     [char]0x2014, # em dash: —
     [char]0x2013, # en dash: –
     [char]0x2212  # minus sign: −
+)
+$reservedBaseNames = @(
+    "CON", "PRN", "AUX", "NUL",
+    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
 )
 
 function Get-FixedName {
     param([string]$Name)
 
     $fixed = $Name
-    foreach ($char in $badChars) {
+
+    foreach ($char in $dashChars) {
         $fixed = $fixed.Replace($char, "-")
     }
+
+    # Characters forbidden in Windows file and folder names.
+    $fixed = $fixed -replace '[<>:"/\\|?*]', "_"
+
+    # ASCII control characters 0x00-0x1F are invalid in Windows names.
+    $fixed = $fixed -replace '[\x00-\x1F]', "_"
+
+    # Some archive tools and Windows compressed folders are fragile around
+    # duplicated dots before extensions: "Alekseev I.I..doc" -> "Alekseev I.I.doc".
+    while ($fixed -match '\.\.([^.]+)$') {
+        $fixed = $fixed -replace '\.\.([^.]+)$', '.$1'
+    }
+
+    # Windows names cannot end with a dot or a space.
+    $fixed = $fixed.TrimEnd(" ", ".")
+
+    # Keep accidental all-bad names usable.
+    if ([string]::IsNullOrWhiteSpace($fixed)) {
+        $fixed = "unnamed"
+    }
+
+    # Reserved device names are forbidden even with extensions.
+    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($fixed)
+    $extension = [System.IO.Path]::GetExtension($fixed)
+    if ($reservedBaseNames -contains $baseName.ToUpperInvariant()) {
+        $fixed = "_" + $baseName + $extension
+    }
+
     return $fixed
 }
 
@@ -93,7 +127,7 @@ function Rename-ItemIfNeeded {
 }
 
 Write-Host ("Target folder: {0}" -f $resolvedRoot)
-Write-Host "Replacing: em dash, en dash, minus sign -> hyphen-minus"
+Write-Host "Sanitizing Windows/ZIP-problematic file and folder names"
 Write-Host ""
 
 $files = @(Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File -Force)
